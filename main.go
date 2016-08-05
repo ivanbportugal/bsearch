@@ -46,7 +46,10 @@ func main() {
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
 	http.Handle("/", r)
 
-	errHttp := http.ListenAndServe(":8080", r)
+	port := ":8080"
+	fmt.Println("Launching on port " + port)
+
+	errHttp := http.ListenAndServe(port, r)
 	if errHttp != nil {
 		log.Println("Could not launch HTTP server: " + errHttp.Error())
 	}
