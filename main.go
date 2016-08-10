@@ -1,7 +1,7 @@
 package main
 
 import (
-	// "encoding/json"
+	"bytes"
 	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	// "encoding/json"
+	// "io/ioutil"
 )
 
 var db *bolt.DB
@@ -18,6 +20,10 @@ var db *bolt.DB
 // 	book      string
 // 	reference string
 // 	verse     string
+// }
+
+// type searchterms struct {
+// 	terms string `json:"terms"`
 // }
 
 func main() {
@@ -57,22 +63,51 @@ func main() {
 
 func SearchHandler(w http.ResponseWriter, r *http.Request) {
 
-	val := r.URL.Query().Get("query")
-	results := queryDb(val, db)
+	// decoder := json.NewDecoder(r.Body)
+	// var input struct {
+	// 	terms string
+	// }
+	// err := decoder.Decode(&input)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(input)
 
+	// var input struct {
+	// 	terms string
+	// }
+	// b, e := ioutil.ReadAll(r.Body)
+	// fmt.Println("FROM BODY! " + string(b))
+	// json.Unmarshal(b, &input)
+	// if e != nil {
+	// 	panic(e)
+	// }
+	// fmt.Println("decoded: " + input.terms)
+
+	val := r.URL.Query().Get("query")
 	w.Header().Set("Content-Type", "application/json")
-	toReturn := "[" + strings.Join(results, ",") + "]"
-	io.WriteString(w, toReturn)
+
+	if val == "" {
+		toReturn := "[]"
+		io.WriteString(w, string(toReturn))
+	} else {
+		vals := strings.Split(val, ",")
+		results := queryDb(vals, db)
+
+		toReturn := "[" + strings.Join(results, ",") + "]"
+		// toReturn, _ := json.Marshal(input)
+		io.WriteString(w, string(toReturn))
+	}
 }
 
-func queryDb(query string, db *bolt.DB) []string {
+func queryDb(queries []string, db *bolt.DB) []string {
 
 	results := []string{}
 
 	err := db.View(func(tx *bolt.Tx) error {
 		tx.ForEach(func(name []byte, bucket *bolt.Bucket) error {
 			// For each bucket (book)
-			result := queryBucket(bucket, string(name[:]), query)
+			result := queryBucket(bucket, string(name[:]), queries)
 			results = append(results, result...)
 			return nil
 		})
@@ -85,12 +120,12 @@ func queryDb(query string, db *bolt.DB) []string {
 	return results
 }
 
-func queryBucket(bucket *bolt.Bucket, book string, query string) []string {
+func queryBucket(bucket *bolt.Bucket, book string, queries []string) []string {
 
 	results := []string{}
 	c := bucket.Cursor()
 	for reference, verseText := c.First(); reference != nil; reference, verseText = c.Next() {
-		if CaseInsensitiveContains(book, query) || CaseInsensitiveContains(string(verseText[:]), query) || CaseInsensitiveContains(string(reference[:]), query) {
+		if isInQueries(book, string(verseText[:]), string(reference[:]), queries) {
 			// fmt.Printf("%s %s %s\n", book, reference, verseText)
 			// j, _ := json.Marshal(stanza{book: book, reference: string(reference), verse: string(verseText)})
 			result := fmt.Sprintf("{\"book\":\"%s\",\"reference\":\"%s\",\"verse\":\"%s\"}", book, string(reference), string(verseText))
@@ -100,7 +135,30 @@ func queryBucket(bucket *bolt.Bucket, book string, query string) []string {
 	return results
 }
 
-func CaseInsensitiveContains(s, substr string) bool {
+func isInQueries(book, verseText, reference string, queries []string) bool {
+	toReturn := false
+	matchesCount := 0
+	var normalized bytes.Buffer
+	normalized.WriteString(book)
+	normalized.WriteString(string(verseText[:]))
+	normalized.WriteString(string(reference[:]))
+
+	for _, query := range queries {
+		if caseInsensitiveContains(normalized.String(), query) {
+			// one match
+			matchesCount++
+		}
+	}
+
+	if matchesCount == len(queries) {
+		// Does an AND on the tags
+		toReturn = true
+	}
+
+	return toReturn
+}
+
+func caseInsensitiveContains(s, substr string) bool {
 	s, substr = strings.ToUpper(s), strings.ToUpper(substr)
 	return strings.Contains(s, substr)
 }
