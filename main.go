@@ -49,10 +49,10 @@ func main() {
 	// Begin Mux
 	r := mux.NewRouter()
 	r.HandleFunc("/search", SearchHandler).Methods("POST")
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static/")))
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./public/")))
 	http.Handle("/", r)
 
-	port := ":8080"
+	port := ":9080"
 	fmt.Println("Launching on port " + port)
 
 	errHttp := http.ListenAndServe(port, r)
